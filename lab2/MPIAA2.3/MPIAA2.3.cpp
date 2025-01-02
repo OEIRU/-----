@@ -2,15 +2,24 @@
 #include <iostream>
 #include <fstream>
 #include <chrono>
-#include <Windows.h>
+#include <math.h>
+// #include <Windows.h>
 using namespace std;
 int main()
 {
-   SetConsoleOutputCP(1251);
+   // SetConsoleOutputCP(1251);
    int n = 2500;
    double* U = NULL;
    if (U == NULL)
+   {
       U = new double[n * n];
+      if (U == NULL)
+      {
+         cerr << "Memory allocation error" << endl;
+         return 1;
+      }
+   }
+
    for (int i = 0; i < n; i++)
       for (int j = 0; j < n; j++)
       {
@@ -23,27 +32,66 @@ int main()
       }
    double* x = NULL;
    if (x == NULL)
+   {
       x = new double[n];
+      if (x == NULL)
+      {
+         cerr << "Memory allocation error" << endl;
+         delete[] U;
+         return 1;
+      }
+   }
+
    for (int i = 0; i < n; i++)
-         x[i] = rand() % 11;
+      x[i] = rand() % 11;
+
    ofstream outx;
    outx.open("x.txt");
+   if (!outx.is_open())
+   {
+      cerr << "Can't open file x.txt" << endl;
+      delete[] U;
+      delete[] x;
+      return 1;
+   }
+
    for (int i = 0; i < n; i++)
       outx << x[i] << " ";
    outx.close();
+
    double* b = NULL;
    if (b == NULL)
+   {
       b = new double[n];
-   for (int i = 0; i < n; i++)
-      b[i] = 0;
+      if (b == NULL)
+      {
+         cerr << "Memory allocation error" << endl;
+         delete[] U;
+         delete[] x;
+         return 1;
+      }
+   }
+
    for (int i = 0; i < n; i++) // Ux = b
       for (int k = 0; k < n; k++)
          b[i] += U[i * n + k] * x[k];
+
    double* y = NULL;
    if (y == NULL)
+   {
       y = new double[n];
+      if (y == NULL)
+      {
+         cerr << "Memory allocation error" << endl;
+         delete[] U;
+         delete[] x;
+         delete[] b;
+         return 1;
+      }
+   }
+
    double start_time = clock();
-   for (int i = n - 1; i > -1; i--) //Uy = b последовательно
+   for (int i = n - 1; i > -1; i--) //Uy = b РїРѕСЃР»РµРґРѕРІР°С‚РµР»СЊРЅРѕ
    {
       y[i] = b[i];
       for (int j = i + 1; j < n; j++)
@@ -52,16 +100,18 @@ int main()
    }
    double end_time = clock();
    double search_time1 = end_time - start_time;
-   cout << "Время параллельного последовательного вычисления: " << fixed <<
+   cout << "Р’СЂРµРјСЏ РїР°СЂР°Р»Р»РµР»СЊРЅРѕРіРѕ РїРѕСЃР»РµРґРѕРІР°С‚РµР»СЊРЅРѕРіРѕ РІС‹С‡РёСЃР»РµРЅРёСЏ: " << fixed <<
       search_time1 << endl;
+
    double norm1 = 0;
    for (int i = 0; i < n; i++)
       norm1 += y[i] * y[i];
-   cout << "Норма вектора y при послеодовательном вычислении: " << sqrt(norm1) <<
+   cout << "РќРѕСЂРјР° РІРµРєС‚РѕСЂР° y РїСЂРё РїРѕСЃР»РµРѕРґРѕРІР°С‚РµР»СЊРЅРѕРј РІС‹С‡РёСЃР»РµРЅРёРё: " << sqrt(norm1) <<
       endl;
+
    start_time = clock();
    double sum = 0;
-   for (int i = n - 1; i > -1; i--) //Uy = b 2 потока
+   for (int i = n - 1; i > -1; i--) //Uy = b 2 РїРѕС‚РѕРєР°
    {
       sum = b[i];
 #pragma omp parallel for num_threads(2) reduction(+:sum)
@@ -71,37 +121,60 @@ int main()
    }
    end_time = clock();
    double search_time2 = end_time - start_time;
-   cout << "Время параллельного двухпоточного вычисления: " << fixed << search_time2
+   cout << "Р’СЂРµРјСЏ РїР°СЂР°Р»Р»РµР»СЊРЅРѕРіРѕ РґРІСѓС…РїРѕС‚РѕС‡РЅРѕРіРѕ РІС‹С‡РёСЃР»РµРЅРёСЏ: " << fixed << search_time2
       << endl;
+
    double norm2 = 0;
    for (int i = 0; i < n; i++)
       norm2 += y[i] * y[i];
-   cout << "Норма вектора y при двухпоточном вычислении: " << sqrt(norm2) << endl;
+   cout << "РќРѕСЂРјР° РІРµРєС‚РѕСЂР° y РїСЂРё РґРІСѓС…РїРѕС‚РѕС‡РЅРѕРј РІС‹С‡РёСЃР»РµРЅРёРё: " << sqrt(norm2) << endl;
+
    start_time = clock();
 
    sum = 0;
-   for (int i = n - 1; i > -1; i--) //Uy = b 16 потоков
+   for (int i = n - 1; i > -1; i--) //Uy = b 20 РїРѕС‚РѕРєРѕРІ
    {
-         sum = b[i];
-#pragma omp parallel for num_threads(8) reduction(+:sum)
+      sum = b[i];
+   int max_threads = omp_get_max_threads();
+#pragma omp parallel for num_threads(max_threads) reduction(+:sum)
       for (int j = n - 1; j > i; j--)
          sum -= U[n * i + j] * y[j];
-      y[i] = sum/ U[i * n + i];
+      y[i] = sum / U[i * n + i];
    }
    end_time = clock();
-   double search_time16 = end_time - start_time;
-   cout << "Время параллельного шестнадцатипоточного вычисления: " << fixed <<
-      search_time16 << endl;
-   double norm16 = 0;
+   double search_time20 = end_time - start_time;
+   cout << "Р’СЂРµРјСЏ РїР°СЂР°Р»Р»РµР»СЊРЅРѕРіРѕ 20 РїРѕС‚РѕС‡РЅРѕРј РІС‹С‡РёСЃР»РµРЅРёСЏ: " << fixed <<
+      search_time20 << endl;
+
+   double norm20 = 0;
    for (int i = 0; i < n; i++)
-      norm16 += y[i] * y[i];
-   cout << "Норма вектора y при шестнадцатипоточном вычислении: " << sqrt(norm16) <<
+      norm20 += y[i] * y[i];
+   cout << "РќРѕСЂРјР° РІРµРєС‚РѕСЂР° y РїСЂРё 20 РїРѕС‚РѕС‡РЅРѕРј РІС‹С‡РёСЃР»РµРЅРёРё: " << sqrt(norm20) <<
       endl;
-   cout << "Ускорение от двух потоков: " << search_time1 / search_time2 << endl;
-   cout << "Ускорение от шестнадцати потоков: " << search_time1 / search_time16 <<
+
+   cout << "РЈСЃРєРѕСЂРµРЅРёРµ РѕС‚ РґРІСѓС… РїРѕС‚РѕРєРѕРІ: " << search_time1 / search_time2 << endl;
+   cout << "РЈСЃРєРѕСЂРµРЅРёРµ РѕС‚ 20 РїРѕС‚РѕРєРѕРІ: " << search_time1 / search_time20 <<
       endl;
+
    ofstream outy;
    outy.open("y.txt");
+   if (!outy.is_open())
+   {
+      cerr << "Can't open file y.txt" << endl;
+      delete[] U;
+      delete[] x;
+      delete[] b;
+      delete[] y;
+      return 1;
+   }
+
    for (int i = 0; i < n; i++)
       outy << y[i] << " ";
+   outy.close();
+
+   delete[] U;
+   delete[] x;
+   delete[] b;
+   delete[] y;
+   return 0;
 }

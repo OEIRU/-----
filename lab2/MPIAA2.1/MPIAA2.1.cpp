@@ -1,63 +1,80 @@
 #include <omp.h>
 #include <iostream>
 #include <chrono>
-#include <Windows.h>
-
+#include <cmath>
+#include <ctime>
+#include <vector>
 using namespace std;
-int main()
-{
-   SetConsoleOutputCP(1251);
 
-   int n = 100000000;
-   double s = 0;
-
-   double* x = NULL; // объявление
-   if (x == NULL)
-      x = new double[n]; // выделение памяти
-
-   for (int i = 0; i < n; i++)
-      x[i] = rand() % 11;
-
-   double* y = NULL;
-   if (y == NULL)
-      y = new double[n];
-
-   for (int i = 0; i < n; i++)
-      y[i] = rand() % 1;
-
-   double start_time = clock();
-   for (int i = 0; i < n; i++)
-      s += x[i] * y[i];
-   s = sqrt(s);
-   double end_time = clock();
-   double search_time1 = end_time - start_time;
-   cout << "время работы последовательной программы: " << search_time1 << "\n";
-   cout << "результат работы последовательной программы: " << s << "\n";
-   
-   s = 0;
-   start_time = clock();
-   double a = 0;
-#pragma omp parallel for num_threads(2) reduction(+:s)
-   for (int i = 0; i < n; i++)
-      s += x[i] * y[i];
-   s = sqrt(s);
-   end_time = clock();
-   double search_time2 = end_time - start_time;
-   cout << "\nвремя работы последовательной(2 потока) программы: " << search_time2 << "\n";
-   cout << "результат работы параллельной(2 потока) программы: " << s << "\n";
-   
-   s = 0;
-   start_time = clock();
-#pragma omp parallel for num_threads(omp_get_max_threads()) reduction(+:s)
-   for (int i = 0; i < n; i++)
-      s += x[i] * y[i];
-   s = sqrt(s);
-   end_time = clock();
-   double search_timemax = end_time - start_time;
-   cout << "\nвремя работы последовательной("<<omp_get_max_threads()<<" потоков) программы: " << search_timemax << "\n";
-   cout << "результат работы параллельной(" << omp_get_max_threads() << " потоков) программы: " << s << "\n";
-
-   cout << "ускорения при использовании 2 потоков: " << search_time1 / search_time2 << endl;
-   cout << "ускорения при использовании " << omp_get_max_threads() << " потоков: " << search_time1 / search_timemax << endl;
+double sequential_dot_product(const vector<double>& x, const vector<double>& y) {
+    double result = 0.0;
+    for (size_t i = 0; i < x.size(); i++) {
+        result += x[i] * y[i];
+    }
+    return result;
 }
 
+double parallel_dot_product(const vector<double>& x, const vector<double>& y, int num_threads) {
+    double result = 0.0;
+
+    // РџР°СЂР°Р»Р»РµР»СЊРЅРѕРµ РІС‹С‡РёСЃР»РµРЅРёРµ СЃ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµРј OpenMP СЃ Р·Р°РґР°РЅРЅС‹Рј РєРѕР»РёС‡РµСЃС‚РІРѕРј РїРѕС‚РѕРєРѕРІ
+    #pragma omp parallel for num_threads(num_threads) reduction(+:result)
+    for (size_t i = 0; i < x.size(); i++) {
+        result += x[i] * y[i];
+    }
+    
+    return result;
+}
+
+int main() {
+    // РўРµСЃС‚РѕРІС‹Рµ РґР°РЅРЅС‹Рµ РґР»СЏ СЂР°Р·РЅС‹С… n
+    vector<int> test_sizes = {10, 1000, 100000, 1000000, 100000000};
+
+    // РЎС‚Р°СЂС‚СѓРµРј С‚РµСЃС‚РёСЂРѕРІР°РЅРёРµ
+    for (int n : test_sizes) {
+        // РРЅРёС†РёР°Р»РёР·Р°С†РёСЏ РІРµРєС‚РѕСЂРѕРІ СЃР»СѓС‡Р°Р№РЅС‹РјРё С‡РёСЃР»Р°РјРё
+        vector<double> x(n), y(n);
+        srand(42);  // Р”Р»СЏ РІРѕСЃРїСЂРѕРёР·РІРѕРґРёРјРѕСЃС‚Рё
+
+        for (int i = 0; i < n; i++) {
+            x[i] = rand() / (RAND_MAX + 1.0);  // РЎР»СѓС‡Р°Р№РЅС‹Рµ С‡РёСЃР»Р° РѕС‚ 0 РґРѕ 1
+            y[i] = rand() / (RAND_MAX + 1.0);  // РЎР»СѓС‡Р°Р№РЅС‹Рµ С‡РёСЃР»Р° РѕС‚ 0 РґРѕ 1
+        }
+
+        // РџРѕСЃР»РµРґРѕРІР°С‚РµР»СЊРЅРѕРµ РІС‹С‡РёСЃР»РµРЅРёРµ
+        auto start = chrono::high_resolution_clock::now();
+        double sequential_result = sequential_dot_product(x, y);
+        auto end = chrono::high_resolution_clock::now();
+        chrono::duration<double> duration_seq = end - start;
+
+        // РџР°СЂР°Р»Р»РµР»СЊРЅРѕРµ РІС‹С‡РёСЃР»РµРЅРёРµ РЅР° 2 РїРѕС‚РѕРєР°С…
+        start = chrono::high_resolution_clock::now();
+        double parallel_result_2 = parallel_dot_product(x, y, 2);
+        end = chrono::high_resolution_clock::now();
+        chrono::duration<double> duration_par_2 = end - start;
+
+        // РџР°СЂР°Р»Р»РµР»СЊРЅРѕРµ РІС‹С‡РёСЃР»РµРЅРёРµ РЅР° РјР°РєСЃРёРјР°Р»СЊРЅРѕРј С‡РёСЃР»Рµ РїРѕС‚РѕРєРѕРІ
+        start = chrono::high_resolution_clock::now();
+        int max_threads = omp_get_max_threads();
+        double parallel_result_max = parallel_dot_product(x, y, max_threads);
+        end = chrono::high_resolution_clock::now();
+        chrono::duration<double> duration_par_max = end - start;
+
+        // РЈСЃРєРѕСЂРµРЅРёРµ
+        double speedup_2 = duration_seq.count() / duration_par_2.count();
+        double speedup_max = duration_seq.count() / duration_par_max.count();
+
+        // Р’С‹РІРѕРґ СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ
+        cout << "Р Р°Р·РјРµСЂ РІРµРєС‚РѕСЂР°: " << n << "\n";
+        cout << "Р РµР·СѓР»СЊС‚Р°С‚ РїРѕСЃР»РµРґРѕРІР°С‚РµР»СЊРЅРѕРіРѕ РІС‹С‡РёСЃР»РµРЅРёСЏ: " << sequential_result << "\n";
+        cout << "Р РµР·СѓР»СЊС‚Р°С‚ РїР°СЂР°Р»Р»РµР»СЊРЅРѕРіРѕ РІС‹С‡РёСЃР»РµРЅРёСЏ (2 РїРѕС‚РѕРєР°): " << parallel_result_2 << "\n";
+        cout << "Р РµР·СѓР»СЊС‚Р°С‚ РїР°СЂР°Р»Р»РµР»СЊРЅРѕРіРѕ РІС‹С‡РёСЃР»РµРЅРёСЏ (РјР°РєСЃ. РїРѕС‚РѕРєРё): " << parallel_result_max << "\n";
+        cout << "Р’СЂРµРјСЏ СЂР°Р±РѕС‚С‹ РїРѕСЃР»РµРґРѕРІР°С‚РµР»СЊРЅРѕР№ РїСЂРѕРіСЂР°РјРјС‹: " << duration_seq.count() << " СЃРµРєСѓРЅРґ\n";
+        cout << "Р’СЂРµРјСЏ СЂР°Р±РѕС‚С‹ РїР°СЂР°Р»Р»РµР»СЊРЅРѕР№ РїСЂРѕРіСЂР°РјРјС‹ (2 РїРѕС‚РѕРєР°): " << duration_par_2.count() << " СЃРµРєСѓРЅРґ\n";
+        cout << "Р’СЂРµРјСЏ СЂР°Р±РѕС‚С‹ РїР°СЂР°Р»Р»РµР»СЊРЅРѕР№ РїСЂРѕРіСЂР°РјРјС‹ (РјР°РєСЃ. РїРѕС‚РѕРєРё): " << duration_par_max.count() << " СЃРµРєСѓРЅРґ\n";
+        cout << "РЈСЃРєРѕСЂРµРЅРёРµ (2 РїРѕС‚РѕРєР°): " << speedup_2 << "\n";
+        cout << "РЈСЃРєРѕСЂРµРЅРёРµ (РјР°РєСЃ. РїРѕС‚РѕРєРё): " << speedup_max << "\n\n";
+    }
+
+    return 0;
+}
