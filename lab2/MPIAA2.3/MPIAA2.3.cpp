@@ -8,7 +8,7 @@ using namespace std;
 int main()
 {
    // SetConsoleOutputCP(1251);
-   int n = 2500;
+   int n = 25000;
    double* U = NULL;
    if (U == NULL)
    {
